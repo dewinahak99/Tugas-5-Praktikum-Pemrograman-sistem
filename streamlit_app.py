@@ -16,6 +16,7 @@ st.sidebar.markdown("Ivan Nahak")
 
 # Fungsi untuk memuat data
 def load_data(file):
+    
     try:
         data = pd.read_csv(file)
         return data
