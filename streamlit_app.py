@@ -102,3 +102,5 @@ def tampilkan_hasil(model_name, y_test, y_pred, X, X_train, y_train, X_test):
 
 if __name__ == "__main__":
     main()
+
+
