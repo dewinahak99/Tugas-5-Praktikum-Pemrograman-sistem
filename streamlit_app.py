@@ -87,6 +87,7 @@ def tampilkan_hasil(model_name, y_test, y_pred, X, X_train, y_train, X_test):
     ax.set_ylabel('True Labels')
     st.pyplot(fig)
 
+
     # Visualisasi Data (jika ada 2 fitur)
     st.write("### Visualisasi Data (Hanya untuk 2 Fitur)")
     if X.shape[1] > 2:
