@@ -1,149 +1,104 @@
 import streamlit as st
 import pandas as pd
-from sklearn.svm import SVC
-from sklearn.linear_model import LogisticRegression
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.preprocessing import LabelEncoder
+import numpy as np
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import ConfusionMatrixDisplay, RocCurveDisplay, PrecisionRecallDisplay
-from sklearn.metrics import precision_score, recall_score, accuracy_score
-from sklearn.exceptions import NotFittedError
+from sklearn.svm import SVC
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
+import seaborn as sns
+import matplotlib.pyplot as plt
+from sklearn.datasets import load_iris
 
-st.title("Binary/Multiclass Classification Web App")
-st.sidebar.title("Binary/Multiclass Classification Web App")
-st.markdown("Upload your dataset and classify it!📊")
-st.sidebar.markdown("Ivan Nahak")
+# Fungsi utama
+def main():
+    st.title("Aplikasi Klasifikasi Machine Learning")
+    st.sidebar.title("Pengaturan Model")
 
-# Fungsi untuk memuat data
-def load_data(file):
-    
-    try:
-        data = pd.read_csv(file)
-        return data
-    except Exception as e:
-        st.error(f"Error loading data: {e}")
-        return None
+    # Pilih model
+    st.sidebar.write("Ivan Nahak")
+    model_name = st.sidebar.selectbox("Model Klasifikasi", ["SVM", "Random Forest"])
 
-# Fungsi untuk memisahkan fitur dan target
-def split(df, target_column):
-    y = df[target_column]
-    x = df.drop(columns=[target_column])
-    x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.3, random_state=42)
-    return x_train, x_test, y_train, y_test
+    # Load dataset
+    st.write("### Pilih Dataset")
+    dataset_name = st.selectbox("Pilih dataset", ["Iris", "Upload dataset Anda"])
+    if dataset_name == "Iris":
+        data = load_iris(as_frame=True)
+        X = data['data']
+        y = data['target']
+        st.write("Dataset Iris:")
+        st.dataframe(X.head())
+    else:
+        uploaded_file = st.file_uploader("Upload file CSV", type=["csv"])
+        if uploaded_file is not None:
+            df = pd.read_csv(uploaded_file)
+            st.write("Dataset Anda:")
+            st.dataframe(df.head())
+            X = df.iloc[:, :-1]
+            y = df.iloc[:, -1]
 
-# Fungsi untuk menampilkan metrik evaluasi
-def plot_metrics(metrics_list, model, x_test, y_test):
-    if 'Confusion Matrix' in metrics_list:
-        st.subheader("Confusion Matrix")
-        ConfusionMatrixDisplay.from_estimator(model, x_test, y_test)
-        st.pyplot()
+    # Split dataset
+    test_size = st.sidebar.slider("Persentase data uji (%)", 10, 50, 20) / 100
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=42)
 
-    if 'ROC Curve' in metrics_list:
-        st.subheader("ROC Curve")
-        if len(set(y_test)) == 2:  # ROC Curve hanya untuk binary classification
-            RocCurveDisplay.from_estimator(model, x_test, y_test)
-        else:  # Multiclass ROC Curve
-            from sklearn.multiclass import OneVsRestClassifier
-            from sklearn.metrics import roc_auc_score
-            # Create OneVsRestClassifier for multiclass ROC
-            model = OneVsRestClassifier(model)
-            RocCurveDisplay.from_estimator(model, x_test, y_test)
-        st.pyplot()
+    if model_name == "SVM":
+        # Parameter SVM
+        st.sidebar.write("### Parameter Model SVM")
+        kernel = st.sidebar.selectbox("Kernel", ["linear", "poly", "rbf", "sigmoid"])
+        C = st.sidebar.slider("C (Regularization)", 0.01, 10.0, 1.0)
 
-    if 'Precision-Recall Curve' in metrics_list:
-        st.subheader("Precision-Recall Curve")
-        PrecisionRecallDisplay.from_estimator(model, x_test, y_test)
-        st.pyplot()
+        # Train SVM
+        if st.sidebar.button("Latih Model"):
+            model = SVC(kernel=kernel, C=C, random_state=42)
+            model.fit(X_train, y_train)
+            y_pred = model.predict(X_test)
 
-# Widget untuk unggah file dataset
-uploaded_file = st.sidebar.file_uploader("Upload your CSV file", type="csv")
+            # Evaluasi Model
+            tampilkan_hasil(model_name, y_test, y_pred, X, X_train, y_train, X_test)
 
-if uploaded_file:
-    df = load_data(uploaded_file)
-    if df is not None:
-        st.write("Preview Dataset:")
-        st.write(df.head())
+    elif model_name == "Random Forest":
+        # Parameter Random Forest
+        st.sidebar.write("### Parameter Model Random Forest")
+        n_estimators = st.sidebar.slider("Jumlah Estimators", 10, 200, 100, 10)
+        max_depth = st.sidebar.slider("Kedalaman Maksimum", 1, 50, 10)
 
-        # Pilih kolom target
-        target_column = st.sidebar.selectbox("Select target column", options=df.columns)
-        
-        # Encode kolom target jika diperlukan
-        label_encoder = LabelEncoder()
-        df[target_column] = label_encoder.fit_transform(df[target_column])
+        # Train Random Forest
+        if st.sidebar.button("Latih Model"):
+            model = RandomForestClassifier(n_estimators=n_estimators, max_depth=max_depth, random_state=42)
+            model.fit(X_train, y_train)
+            y_pred = model.predict(X_test)
 
-        # Split data
-        x_train, x_test, y_train, y_test = split(df, target_column)
+            # Evaluasi Model
+            tampilkan_hasil(model_name, y_test, y_pred, X, X_train, y_train, X_test)
 
-        # Pilih model
-        st.sidebar.subheader("Choose Classifier")
-        classifier = st.sidebar.selectbox("Classifier", ("Support Vector Machine (SVM)", "Logistic Regression", "Random Forest"))
+# Fungsi untuk menampilkan hasil
+def tampilkan_hasil(model_name, y_test, y_pred, X, X_train, y_train, X_test):
+    st.write(f"### Hasil Klasifikasi ({model_name})")
+    accuracy = accuracy_score(y_test, y_pred)
+    st.write(f"**Akurasi:** {accuracy * 100:.2f}%")
+    st.write("### Laporan Klasifikasi")
+    st.text(classification_report(y_test, y_pred))
 
-        # Support Vector Machine (SVM)
-        if classifier == 'Support Vector Machine (SVM)':
-            st.sidebar.subheader("Model Hyperparameters")
-            C = st.sidebar.number_input("C (Regularization parameter)", 0.01, 10.0, step=0.01, key='C')
-            kernel = st.sidebar.radio("Kernel", ("rbf", "linear"), key='kernel')
-            gamma = st.sidebar.radio("Gamma (Kernel Co efficient)", ("scale", "auto"), key='gamma')
-            metrics = st.sidebar.multiselect("What metrics to plot?", ('Confusion Matrix', 'ROC Curve', 'Precision-Recall Curve'))
+    # Confusion Matrix
+    st.write("### Confusion Matrix")
+    cm = confusion_matrix(y_test, y_pred)
+    fig, ax = plt.subplots()
+    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', xticklabels=np.unique(y_test), yticklabels=np.unique(y_test))
+    ax.set_xlabel('Predicted Labels')
+    ax.set_ylabel('True Labels')
+    st.pyplot(fig)
 
-            if st.sidebar.button("Classify", key='classify'):
-                st.subheader("Support Vector Machine (SVM) Results")
-                model = SVC(C=C, kernel=kernel, gamma=gamma)
-                model.fit(x_train, y_train)
-                y_pred = model.predict(x_test)
+    # Visualisasi Data (jika ada 2 fitur)
+    st.write("### Visualisasi Data (Hanya untuk 2 Fitur)")
+    if X.shape[1] > 2:
+        st.warning("Visualisasi hanya untuk dataset dengan 2 fitur. Dataset Anda memiliki lebih dari 2 fitur.")
+    else:
+        plt.figure(figsize=(8, 6))
+        plt.scatter(X_train.iloc[:, 0], X_train.iloc[:, 1], c=y_train, cmap='viridis', label="Data Latih")
+        plt.scatter(X_test.iloc[:, 0], X_test.iloc[:, 1], c=y_pred, cmap='coolwarm', marker='x', label="Prediksi")
+        plt.legend()
+        plt.xlabel("Fitur 1")
+        plt.ylabel("Fitur 2")
+        st.pyplot(plt)
 
-                # Mengatur average berdasarkan apakah binary atau multiclass
-                average_type = 'binary' if len(set(y_test)) == 2 else 'macro'
-                st.write("Accuracy: ", accuracy_score(y_test, y_pred))
-                st.write("Precision: ", precision_score(y_test, y_pred, average=average_type))
-                st.write("Recall: ", recall_score(y_test, y_pred, average=average_type))
-                plot_metrics(metrics, model, x_test, y_test)
-
-        # Logistic Regression
-        if classifier == 'Logistic Regression':
-            st.sidebar.subheader("Model Hyperparameters")
-            C = st.sidebar.number_input("C (Regularization parameter)", 0.01, 10.0, step=0.01, key='C_LR')
-            max_iter = st.sidebar.slider("Maximum number of iterations", 100, 500, key='max_iter')
-            metrics = st.sidebar.multiselect("What metrics to plot?", ('Confusion Matrix', 'ROC Curve', 'Precision-Recall Curve'))
-
-            if st.sidebar.button("Classify", key='classify'):
-                st.subheader("Logistic Regression Results")
-                model = LogisticRegression(C=C, max_iter=max_iter)
-                model.fit(x_train, y_train)
-                y_pred = model.predict(x_test)
-
-                # Mengatur average berdasarkan apakah binary atau multiclass
-                average_type = 'binary' if len(set(y_test)) == 2 else 'macro'
-                st.write("Accuracy: ", accuracy_score(y_test, y_pred))
-                st.write("Precision: ", precision_score(y_test, y_pred, average=average_type))
-                st.write("Recall: ", recall_score(y_test, y_pred, average=average_type))
-                plot_metrics(metrics, model, x_test, y_test)
-
-        # Random Forest
-        if classifier == 'Random Forest':
-            st.sidebar.subheader("Model Hyperparameters")
-            n_estimators = st.sidebar.number_input("Number of trees", 100, 5000, step=10, key='n_estimators')
-            max_depth = st.sidebar.number_input("Maximum depth of the tree", 1, 20, step=1, key='max_depth')
-            bootstrap = st.sidebar.radio("Bootstrap samples", [True, False], key='bootstrap')
-            metrics = st.sidebar.multiselect("What metrics to plot?", ('Confusion Matrix', 'ROC Curve', 'Precision-Recall Curve'))
-
-            if st.sidebar.button("Classify", key='classify'):
-                st.subheader("Random Forest Results")
-                model = RandomForestClassifier(n_estimators=n_estimators, max_depth=max_depth, bootstrap=bootstrap, n_jobs=-1)
-                model.fit(x_train, y_train)
-                y_pred = model.predict(x_test)
-
-                # Mengatur average berdasarkan apakah binary atau multiclass
-                average_type = 'binary' if len(set(y_test)) == 2 else 'macro'
-                st.write("Accuracy: ", accuracy_score(y_test, y_pred))
-                st.write("Precision: ", precision_score(y_test, y_pred, average=average_type))
-                st.write("Recall: ", recall_score(y_test, y_pred, average=average_type))
-                plot_metrics(metrics, model, x_test, y_test)
-
-        # Show raw data option
-        if st.sidebar.checkbox("Show raw data", False):
-            st.subheader("Dataset")
-            st.write(df)
-
-else:
-    st.write("Please upload a dataset to start.")
+if __name__ == "__main__":
+    main()
